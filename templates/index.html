@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A钱小助手</title>
+    <script>
+        let receiptCount = 0;
+
+        // 动态添加小票表单
+        function addReceipt() {
+            receiptCount++;
+            const container = document.getElementById('receipts-container');
+
+            // 创建新的小票表单
+            const newReceipt = document.createElement('div');
+            newReceipt.setAttribute('id', `receipt-${receiptCount}`);
+            newReceipt.innerHTML = `
+                <h3>小票 ${receiptCount}</h3>
+                <label for="total_amount_${receiptCount}">请输入小票总金额:</label>
+                <input type="number" name="total_amount_${receiptCount}" step="0.01" required><br><br>
+
+                <label>请选择参与平摊的小票参与者:</label><br>
+                {% for person in people %}
+                    <input type="checkbox" name="participants_${receiptCount}" value="{{ person }}" onchange="updateExpenseFields(${receiptCount})"> {{ person }}<br>
+                {% endfor %}
+                <br>
+
+                <label for="payer_${receiptCount}">请选择付款人:</label>
+                <select name="payer_${receiptCount}">
+                    {% for person in people %}
+                        <option value="{{ person }}">{{ person }}</option>
+                    {% endfor %}
+                </select><br><br>
+
+                <!-- 动态个人消费输入框 -->
+                <label>个人消费:</label><br>
+                <div id="expense-fields-${receiptCount}"></div>
+
+                <!-- 显示个人消费总和 -->
+                <p>个人消费总和: <span id="total-expense-${receiptCount}">0.00</span> 元</p>
+                <!-- Clear button for this receipt -->
+                <button type="button" onclick="clearReceipt(${receiptCount})">清空</button>
+                <hr>
+            `;
+
+            container.appendChild(newReceipt);
+        }
+
+        // 监听复选框变化，动态添加或移除个人消费输入框
+        function updateExpenseFields(receiptIndex) {
+            const container = document.getElementById(`expense-fields-${receiptIndex}`);
+            container.innerHTML = ''; // 清空已有的个人消费框
+
+            // 获取所有选中的复选框
+            const checkedParticipants = document.querySelectorAll(`input[name="participants_${receiptIndex}"]:checked`);
+
+            checkedParticipants.forEach((checkbox) => {
+                const person = checkbox.value;
+
+                // 为每个选中的参与者生成个人消费输入框
+                const newField = document.createElement('div');
+                newField.setAttribute('id', `expense-${person}-${receiptIndex}`);
+                newField.innerHTML = `
+                    <label>个人消费 (${person}):</label>
+                    <input type="text" name="personal_expense_${person}_${receiptIndex}" oninput="calculateTotalExpense(${receiptIndex})" placeholder="例如 6.5/2">
+                    <br>`;
+                container.appendChild(newField);
+            });
+        }
+
+        // 计算所有个人消费输入框的总和
+        function calculateTotalExpense(receiptIndex) {
+            const container = document.getElementById(`expense-fields-${receiptIndex}`);
+            let totalExpense = 0;
+
+            // 遍历每个输入框并计算表达式的值
+            container.querySelectorAll('input[type="text"]').forEach(field => {
+                const value = field.value;
+                try {
+                    if (value.trim() !== "") {
+                        totalExpense += eval(value);
+                    }
+                } catch (e) {
+                    // 忽略非法输入
+                }
+            });
+
+            // 显示总消费
+            document.getElementById(`total-expense-${receiptIndex}`).innerText = totalExpense.toFixed(2);
+        }
+
+        // Save receipt data to localStorage
+        function saveFormData() {
+            const receipts = [];
+            for (let i = 1; i <= receiptCount; i++) {
+                const totalAmount = document.querySelector(`input[name="total_amount_${i}"]`).value;
+                const participants = Array.from(document.querySelectorAll(`input[name="participants_${i}"]:checked`)).map(el => el.value);
+                const payer = document.querySelector(`select[name="payer_${i}"]`).value;
+
+                // Collect personal expenses
+                const personalExpenses = {};
+                participants.forEach(person => {
+                    const expense = document.querySelector(`input[name="personal_expense_${person}_${i}"]`).value;
+                    personalExpenses[person] = expense;
+                });
+
+                receipts.push({
+                    totalAmount,
+                    participants,
+                    payer,
+                    personalExpenses
+                });
+            }
+            localStorage.setItem('receipts', JSON.stringify(receipts));
+        }
+
+        // Load receipt data from localStorage and rebuild the form
+        function loadFormData() {
+            const savedReceipts = JSON.parse(localStorage.getItem('receipts')) || [];
+            savedReceipts.forEach((receiptData, index) => {
+                addReceipt();
+                const receiptIndex = index + 1;
+
+                document.querySelector(`input[name="total_amount_${receiptIndex}"]`).value = receiptData.totalAmount;
+                receiptData.participants.forEach(participant => {
+                    document.querySelector(`input[name="participants_${receiptIndex}"][value="${participant}"]`).checked = true;
+                });
+                document.querySelector(`select[name="payer_${receiptIndex}"]`).value = receiptData.payer;
+
+                updateExpenseFields(receiptIndex);
+
+                // Restore personal expenses
+                receiptData.participants.forEach(person => {
+                    document.querySelector(`input[name="personal_expense_${person}_${receiptIndex}"]`).value = receiptData.personalExpenses[person];
+                });
+
+                calculateTotalExpense(receiptIndex);
+            });
+        }
+
+        // Add event listeners to automatically save form data on change
+        window.addEventListener('input', saveFormData);
+        window.addEventListener('load', loadFormData);
+
+        // Function to clear all data
+        function clearFormData() {
+            // Clear localStorage
+            localStorage.removeItem('receipts');
+
+            // Reset the form UI
+            document.getElementById('receipts-container').innerHTML = '';
+            receiptCount = 0;
+        }
+
+        // Function to clear a specific receipt
+        function clearReceipt(receiptIndex) {
+            // Clear the fields of the specific receipt
+            document.querySelector(`input[name="total_amount_${receiptIndex}"]`).value = '';
+            document.querySelectorAll(`input[name="participants_${receiptIndex}"]`).forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            //document.querySelector(`select[name="payer_${receiptIndex}"]`).value = '';
+            document.getElementById(`expesnse-fields-${receiptIndex}`).innerHTML = '';
+            document.getElementById(`total-expense-${receiptIndex}`).innerText = '0.00';
+
+            // Update the saved data in localStorage
+            saveFormData();
+        }
+    </script>
+</head>
+
+<body>
+    <h1>A钱小助手</h1>
+
+    <!-- 动态添加小票按钮 -->
+    <button type="button" onclick="addReceipt()">添加新的小票</button>
+    <button type="button" onclick="clearFormData()">一键清空</button>
+    <br><br>
+
+    <!-- 容纳所有小票的容器 -->
+    <form method="POST">
+        <div id="receipts-container">
+            <!-- 小票表单将动态添加到这里 -->
+        </div>
+
+        <!-- 提交表单 -->
+        <input type="submit" value="提交">
+    </form>
+</body>
+
+</html>

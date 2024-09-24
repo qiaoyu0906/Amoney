@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添加参与者</title>
+    <script>
+        // 在提交前保存参与者的名字到 localStorage
+        function saveParticipants() {
+            const participants = document.getElementById('participants').value.split(/\s+/);
+            localStorage.setItem('participants', JSON.stringify(participants));
+        }
+    </script>
+</head>
+<body>
+    <h1>添加参与者</h1>
+    <form action="/" method="POST" onsubmit="saveParticipants()">
+        <label for="participants">请输入参与者名字（用空格分开）:</label>
+        <input type="text" id="participants" name="participants" required>
+        <input type="submit" value="提交">
+    </form>
+</body>
+</html>
